@@ -26,6 +26,7 @@
             height: auto;
             opacity: 0;
             animation: pageLoadFade 2s ease-in-out forwards; /* Fade-in on page load */
+            cursor: pointer;
         }
 
         /* Style both images so they are responsive and identical */
@@ -92,6 +93,37 @@
             100% {opacity: 1 }
         }
 
+        /* ================================================================
+        4. LAYER C: THE COUNTDOWN (Revealed on click)
+           ================================================================ */
+
+        .countdown {
+            position: absolute;
+            left: 0;
+            bottom: 8%;
+            width: 100%;
+            z-index: 2;
+
+            /* Clicks fall through to the wrapper so the artwork stays clickable */
+            pointer-events: none;
+
+            text-align: center;
+            font-family: "SF Mono", "Menlo", "DejaVu Sans Mono", "Consolas", monospace;
+            font-size: clamp(0.62rem, 3.1vw, 1.6rem);
+            letter-spacing: 0.08em;
+            color: #ffffff;
+            text-shadow: 0 0 0.35em #000, 0 0 1em #000, 0 0 2em #000;
+
+            opacity: 0;
+            transition: opacity 1.5s ease-in-out; /* Slow fade out, matching the artwork */
+        }
+
+        .hover-wrapper.revealed .countdown {
+            opacity: 1;
+            transition: opacity 0.5s ease-in-out; /* Fast fade in, matching the artwork */
+            animation: flickerEffect 5s ease-in-out infinite;
+        }
+
         /* Target tag <body> and set margin to 0 so the page doesn't scroll */
         body {
             background-color: #000000;
@@ -103,7 +135,7 @@
 </head>
 <body>
     <div class="image-container">
-        <div class="hover-wrapper">
+        <div class="hover-wrapper" id="wrapper">
 
             <img src="possessor_default.png" class="base-img">
             
@@ -112,7 +144,80 @@
                 <img src="possessor_mouseover.png" class="hover-img">
 
             </div>
+
+            <div class="countdown" id="countdown">0000.00.00.00.00.00.00</div>
+
         </div>
     </div>
+
+    <script>
+        // Release: the stroke of midnight ending Friday, Sept 12 2026, pinned to
+        // Pacific (-07:00) so the drop lands at the same instant everywhere.
+        var RELEASE = new Date("2026-09-12T00:00:00-07:00");
+        var STORE = "https://lariatsystems.bandcamp.com/";
+
+        var wrapper = document.getElementById("wrapper");
+        var countdown = document.getElementById("countdown");
+        var frame = null;
+
+        function pad(n, width) {
+            n = String(n);
+            while (n.length < width) { n = "0" + n; }
+            return n;
+        }
+
+        // Calendar-aware remainder, so the yyyy.mm.dd segments mean real years
+        // and months rather than an averaged approximation.
+        function remaining(from, to) {
+            var y = to.getFullYear() - from.getFullYear();
+            var mo = to.getMonth() - from.getMonth();
+            var d = to.getDate() - from.getDate();
+            var h = to.getHours() - from.getHours();
+            var mi = to.getMinutes() - from.getMinutes();
+            var s = to.getSeconds() - from.getSeconds();
+            var ms = to.getMilliseconds() - from.getMilliseconds();
+
+            if (ms < 0) { ms += 1000; s -= 1; }
+            if (s < 0) { s += 60; mi -= 1; }
+            if (mi < 0) { mi += 60; h -= 1; }
+            if (h < 0) { h += 24; d -= 1; }
+            if (d < 0) {
+                // Borrow the length of the month preceding the target date
+                d += new Date(to.getFullYear(), to.getMonth(), 0).getDate();
+                mo -= 1;
+            }
+            if (mo < 0) { mo += 12; y -= 1; }
+
+            return [pad(y, 4), pad(mo, 2), pad(d, 2), pad(h, 2),
+                    pad(mi, 2), pad(s, 2), pad(Math.floor(ms / 10), 2)].join(".");
+        }
+
+        function released() {
+            return Date.now() >= RELEASE.getTime();
+        }
+
+        function tick() {
+            if (released()) {
+                countdown.textContent = "0000.00.00.00.00.00.00";
+                frame = null;
+                return; // Held at zero; the artwork now opens the store
+            }
+            countdown.textContent = remaining(new Date(), RELEASE);
+            frame = requestAnimationFrame(tick);
+        }
+
+        function stop() {
+            if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
+        }
+
+        wrapper.addEventListener("click", function () {
+            if (released()) {
+                window.location.href = STORE;
+                return;
+            }
+            stop();
+            if (wrapper.classList.toggle("revealed")) { tick(); }
+        });
+    </script>
 </body>
 </html>
