@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://lariat.systems/sitemap.xml

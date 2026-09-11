@@ -3,7 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LARIAT</title>
+
+    <title>lariat.systems</title>
+    <link rel="canonical" href="https://lariat.systems/">
+    <meta name="description" content="lariat.systems">
+    <meta name="theme-color" content="#000000">
+
+    <!-- Link previews -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="lariat.systems">
+    <meta property="og:title" content="lariat.systems">
+    <meta property="og:description" content="lariat.systems">
+    <meta property="og:url" content="https://lariat.systems/">
+    <meta property="og:image" content="https://lariat.systems/og-card.jpg">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="lariat.systems">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="lariat.systems">
+    <meta name="twitter:description" content="lariat.systems">
+    <meta name="twitter:image" content="https://lariat.systems/og-card.jpg">
+    <meta name="twitter:image:alt" content="lariat.systems">
+
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <style>
         /* ===============================================================
         0. TYPEFACE
@@ -43,6 +68,16 @@
         }
 
         /* Style both images so they are responsive and identical */
+        /* <picture> is inline by default; keep the frame's geometry exact */
+        .hover-wrapper picture {
+            display: block;
+        }
+
+        .hover-layer-container picture {
+            width: 100%;
+            height: 100%;
+        }
+
         .base-img {
             width: 100%;
             height: auto;
@@ -171,11 +206,19 @@
     <div class="image-container">
         <div class="hover-wrapper" id="wrapper">
 
-            <img src="possessor_default.png" class="base-img">
+            <picture>
+                <source srcset="possessor_default.webp" type="image/webp">
+                <img src="possessor_default-fallback.png" class="base-img"
+                     width="1500" height="1500" alt="lariat.systems">
+            </picture>
             
             <div class="hover-layer-container">
 
-                <img src="possessor_mouseover.png" class="hover-img">
+                <picture>
+                    <source srcset="possessor_mouseover.webp" type="image/webp">
+                    <img src="possessor_mouseover-fallback.png" class="hover-img"
+                         width="1500" height="1500" alt="">
+                </picture>
 
             </div>
 
@@ -253,6 +296,15 @@
             wrapper.classList.add("revealed");
             tick();
         });
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "lariat.systems",
+      "url": "https://lariat.systems/",
+      "sameAs": ["https://lariatsystems.bandcamp.com/"]
+    }
     </script>
 </body>
 </html>
