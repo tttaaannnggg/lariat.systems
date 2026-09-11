@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LARIAT</title>
+    <style>
+        /* ===============================================================
+        1. LAYOUT & FRAMING (Standard Setup)
+           =============================================================== /*
+
+        /* Center the container on the page */
+        .image-container {
+            display: flex;
+            justify-content: center; /* Horizontally centers the image */
+            align-items: center;     /* Vertically centers the image */
+            min-height: 100vh;       /* Gives the container height to allow vertical centering */
+            width: 100%;             /* Ensures container stretches full width */
+        }
+
+        /* Create a relative frame for the two stacked images */
+        .hover-wrapper {
+            position: relative;
+            width: 66.67%;
+            max-width: 750px; /* Limits the desktop size */
+            height: auto;
+            opacity: 0;
+            animation: pageLoadFade 2s ease-in-out forwards; /* Fade-in on page load */
+        }
+
+        /* Style both images so they are responsive and identical */
+        .base-img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* ===============================================================
+        2. LAYER A: BOX CONTAINER (Handles Entry & Exit Speeds)
+           =============================================================== */
+
+        .hover-layer-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0; /* Hidden by default */
+        
+        /* DEFAULT EXIT: Takes 1.5 seconds to smoothly fade out on mouse leave */
+        transition: opacity 1.5s ease-in-out; 
+        }
+
+        /* When hovered, change to the entry transition rules */
+        .hover-wrapper:hover .hover-layer-container {
+            opacity: 1;
+            
+            /* FAST ENTRY: Takes only 0.5 seconds to fade in on mouse enter */
+            transition: opacity 0.5s ease-in-out; 
+        }
+
+        /* ================================================================
+        3. LAYER B: THE IMAGE INSIDE (Handles the Flickering)
+           ================================================================ */
+
+        img.hover-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            
+            /* The image flickers infinitely in the background between 0.7 and 1.0.
+            Because it runs constantly inside a hidden container, there is 
+            NEVER any start delay when the user hovers! */
+            animation: flickerEffect 5s ease-in-out infinite;
+        }
+
+        @keyframes flickerEffect {
+            0% { opacity: 0.7; }
+            15% { opacity: 0.9; }
+            25% { opacity: 0.65; }
+            40% { opacity: 0.85; }
+            55% { opacity: 1; }
+            70% { opacity: 0.75; }
+            80% { opacity: 0.95; }
+            90% { opacity: 0.6; }
+            100% { opacity: 0.7; }
+        }
+
+        @keyframes pageLoadFade {
+            0% { opacity: 0 }
+            100% {opacity: 1 }
+        }
+
+        /* Target tag <body> and set margin to 0 so the page doesn't scroll */
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            margin: 0;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="image-container">
+        <div class="hover-wrapper">
+
+            <img src="possessor_default.png" class="base-img">
+            
+            <div class="hover-layer-container">
+
+                <img src="possessor_mouseover.png" class="hover-img">
+
+            </div>
+        </div>
+    </div>
+</body>
+</html>
