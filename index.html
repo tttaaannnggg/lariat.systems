@@ -11,7 +11,8 @@
 
         @font-face {
             font-family: "VCR OSD Mono";
-            src: url("VCR_OSD_MONO_1.001.ttf") format("truetype");
+            src: url("VCR_OSD_MONO_1.001.woff2") format("woff2"),
+                 url("VCR_OSD_MONO_1.001.ttf") format("truetype");
             font-weight: normal;
             font-style: normal;
             font-display: swap; /* Fall back rather than hide the digits */
@@ -46,15 +47,12 @@
             width: 100%;
             height: auto;
             display: block;
-
-            /* Fades back in after the countdown has cleared */
-            transition: opacity 1.2s ease-in-out 0.4s;
+            transition: opacity 1.2s ease-in-out;
         }
 
-        /* While the countdown is up, the artwork dissolves to black */
+        /* The reveal is one-way: the artwork dissolves to black and stays there */
         .hover-wrapper.revealed .base-img {
             opacity: 0;
-            transition: opacity 1.2s ease-in-out;
         }
 
         .hover-wrapper.revealed .hover-layer-container,
@@ -141,13 +139,13 @@
             pointer-events: none;
 
             opacity: 0;
-            transition: opacity 0.6s ease-in-out; /* Clears out ahead of the artwork */
+
+            /* Waits for the artwork to darken before fading up */
+            transition: opacity 0.8s ease-in-out 0.6s;
         }
 
-        /* Waits for the artwork to darken before fading up */
         .hover-wrapper.revealed .countdown {
             opacity: 1;
-            transition: opacity 0.8s ease-in-out 0.6s;
         }
 
         /* INNER: the flicker lives here, so it never fights the fade above */
@@ -244,17 +242,16 @@
             frame = requestAnimationFrame(tick);
         }
 
-        function stop() {
-            if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
-        }
-
         wrapper.addEventListener("click", function () {
             if (released()) {
                 window.location.href = STORE;
                 return;
             }
-            stop();
-            if (wrapper.classList.toggle("revealed")) { tick(); }
+            if (wrapper.classList.contains("revealed")) {
+                return; // One-way: the countdown does not dismiss
+            }
+            wrapper.classList.add("revealed");
+            tick();
         });
     </script>
 </body>
