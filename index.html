@@ -287,31 +287,58 @@
         }
 
         // ---- Background loop -------------------------------------------
-        // Opus in WebM is the supplied file remuxed, not re-encoded, and its
-        // header pre-skip is stripped by the decoder, so it loops clean. The
-        // AAC/m4a is a transcode kept only for players without WebM Opus.
-        // Playback goes through Web Audio because looping an AudioBuffer is
-        // sample-accurate, where <audio loop> re-seeks between passes.
+        // Opus in WebM is the supplied file remuxed, not re-encoded, so it
+        // decodes bit-identical and its header pre-skip is stripped by the
+        // decoder. The m4a is a transcode kept only as a fallback.
+        //
+        // Each pass is scheduled as its own source on the audio clock rather
+        // than relying on AudioBufferSourceNode.loop, which was verified in
+        // Chrome to play this buffer once and then fall silent. Scheduling
+        // ahead on the audio clock is sample-accurate, so passes still butt
+        // up against each other with no seam.
         var LOOP_SRC = (function () {
             var probe = document.createElement("audio");
             return (probe.canPlayType && probe.canPlayType('audio/webm; codecs="opus"'))
                 ? "loop.webm" : "loop.m4a";
         })();
 
-        // Held at this scope on purpose: a context or element referenced only
-        // inside a callback can be collected mid-playback, which stops the
-        // sound partway through.
+        // The bed peaks at about -32 dBFS, which is inaudible on most
+        // speakers. Raise or lower this one number to set its level.
+        var LOOP_GAIN = 8;
+
+        var LOOKAHEAD = 2.0;   // seconds of passes queued ahead; survives the
+        var PUMP_MS = 500;     // 1s timer throttling of a backgrounded tab
+
+        // Held at this scope on purpose: a context or node referenced only
+        // inside a callback can be collected mid-playback.
         var audioCtx = null;
-        var audioSrc = null;
+        var audioBuf = null;
+        var audioGain = null;
         var audioEl = null;
+        var audioTimer = null;
+        var nextPassAt = 0;
         var audioPlaying = false;
         var audioLoading = false;
+
+        function pump() {
+            if (!audioCtx || !audioBuf) { return; }
+            var now = audioCtx.currentTime;
+            // Realign after a suspension rather than firing a burst of
+            // overlapping passes scheduled in the past.
+            if (nextPassAt < now) { nextPassAt = now + 0.02; }
+            while (nextPassAt < now + LOOKAHEAD) {
+                var s = audioCtx.createBufferSource();
+                s.buffer = audioBuf;
+                s.connect(audioGain);
+                s.start(nextPassAt);
+                nextPassAt += audioBuf.duration;
+            }
+        }
 
         function playFallback() {
             if (audioEl) { return; }
             audioEl = new Audio(LOOP_SRC);
             audioEl.loop = true;
-            // Belt and braces: re-arm by hand if a player ignores loop.
             audioEl.addEventListener("ended", function () {
                 audioEl.currentTime = 0;
                 audioEl.play().catch(function () {});
@@ -319,9 +346,7 @@
             audioEl.play().then(function () {
                 audioPlaying = true;
                 releaseGestures();
-            }).catch(function () {
-                audioEl = null; // still blocked; a later gesture retries
-            });
+            }).catch(function () { audioEl = null; });
         }
 
         function startLoop() {
@@ -355,13 +380,13 @@
                     settled = true;
                     clearTimeout(giveUp);
                     audioLoading = false;
-                    audioSrc = audioCtx.createBufferSource();
-                    audioSrc.buffer = buf;
-                    audioSrc.loop = true;
-                    audioSrc.loopStart = 0;
-                    audioSrc.loopEnd = buf.duration;
-                    audioSrc.connect(audioCtx.destination);
-                    audioSrc.start(0);
+                    audioBuf = buf;
+                    audioGain = audioCtx.createGain();
+                    audioGain.gain.value = LOOP_GAIN;
+                    audioGain.connect(audioCtx.destination);
+                    nextPassAt = audioCtx.currentTime + 0.05;
+                    pump();
+                    audioTimer = setInterval(pump, PUMP_MS);
                     audioPlaying = true;
                     releaseGestures();
                 })
@@ -387,11 +412,12 @@
             document.addEventListener(ev, onGesture, { passive: true });
         });
 
-        // Backgrounded tabs suspend the context; bring it back on return.
+        // A backgrounded tab suspends the context and throttles the pump;
+        // resume and top the queue up straight away on return.
         document.addEventListener("visibilitychange", function () {
-            if (!document.hidden && audioCtx && audioCtx.state === "suspended") {
-                audioCtx.resume();
-            }
+            if (document.hidden || !audioCtx) { return; }
+            if (audioCtx.state === "suspended") { audioCtx.resume(); }
+            pump();
         });
 
         wrapper.addEventListener("click", function () {
