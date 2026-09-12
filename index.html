@@ -287,44 +287,66 @@
         }
 
         // ---- Background loop -------------------------------------------
-        // Web Audio rather than <audio loop>: looping an AudioBuffer is
-        // sample-accurate, where <audio loop> re-seeks and ticks between
-        // iterations. Browsers block audio until a gesture, so this arms on
-        // the first interaction and tries once immediately in case policy
-        // already allows it. The <audio> path below is only a fallback.
-        // Opus in WebM is the source stream remuxed, not re-encoded, and its
-        // header pre-skip is stripped by the decoder - so it loops clean. The
-        // AAC/m4a is a transcode, kept only for players without WebM Opus.
+        // Opus in WebM is the supplied file remuxed, not re-encoded, and its
+        // header pre-skip is stripped by the decoder, so it loops clean. The
+        // AAC/m4a is a transcode kept only for players without WebM Opus.
+        // Playback goes through Web Audio because looping an AudioBuffer is
+        // sample-accurate, where <audio loop> re-seeks between passes.
         var LOOP_SRC = (function () {
             var probe = document.createElement("audio");
             return (probe.canPlayType && probe.canPlayType('audio/webm; codecs="opus"'))
                 ? "loop.webm" : "loop.m4a";
         })();
-        var audioArmed = false;
 
-        function fallbackLoop() {
-            var el = new Audio(LOOP_SRC);
-            el.loop = true;
-            el.play().catch(function () { /* still blocked; a later gesture retries */ });
+        // Held at this scope on purpose: a context or element referenced only
+        // inside a callback can be collected mid-playback, which stops the
+        // sound partway through.
+        var audioCtx = null;
+        var audioSrc = null;
+        var audioEl = null;
+        var audioPlaying = false;
+        var audioLoading = false;
+
+        function playFallback() {
+            if (audioEl) { return; }
+            audioEl = new Audio(LOOP_SRC);
+            audioEl.loop = true;
+            // Belt and braces: re-arm by hand if a player ignores loop.
+            audioEl.addEventListener("ended", function () {
+                audioEl.currentTime = 0;
+                audioEl.play().catch(function () {});
+            });
+            audioEl.play().then(function () {
+                audioPlaying = true;
+                releaseGestures();
+            }).catch(function () {
+                audioEl = null; // still blocked; a later gesture retries
+            });
         }
 
         function startLoop() {
-            if (audioArmed) { return; }
-            audioArmed = true;
+            if (audioPlaying || audioLoading) { return; }
             var AC = window.AudioContext || window.webkitAudioContext;
-            if (!AC) { fallbackLoop(); return; }
-            var ctx = new AC();
+            if (!AC) { playFallback(); return; }
+
+            if (!audioCtx) { audioCtx = new AC(); }
+            if (audioCtx.state === "suspended") { audioCtx.resume(); }
+
+            audioLoading = true;
             var settled = false;
             var giveUp = setTimeout(function () {
-                if (!settled) { settled = true; fallbackLoop(); }
-            }, 4000); // a decode that never settles must not leave silence
+                if (settled) { return; }
+                settled = true;
+                audioLoading = false;
+                playFallback();
+            }, 5000);
 
             fetch(LOOP_SRC)
                 .then(function (r) { return r.arrayBuffer(); })
                 .then(function (ab) {
                     return new Promise(function (res, rej) {
                         // callback form: older Safari returns no promise
-                        var p = ctx.decodeAudioData(ab, res, rej);
+                        var p = audioCtx.decodeAudioData(ab, res, rej);
                         if (p && p.then) { p.then(res, rej); }
                     });
                 })
@@ -332,31 +354,45 @@
                     if (settled) { return; }
                     settled = true;
                     clearTimeout(giveUp);
-                    var src = ctx.createBufferSource();
-                    src.buffer = buf;
-                    src.loop = true;
-                    src.connect(ctx.destination);
-                    src.start(0);
-                    if (ctx.state === "suspended") { ctx.resume(); }
+                    audioLoading = false;
+                    audioSrc = audioCtx.createBufferSource();
+                    audioSrc.buffer = buf;
+                    audioSrc.loop = true;
+                    audioSrc.loopStart = 0;
+                    audioSrc.loopEnd = buf.duration;
+                    audioSrc.connect(audioCtx.destination);
+                    audioSrc.start(0);
+                    audioPlaying = true;
+                    releaseGestures();
                 })
                 .catch(function () {
                     if (settled) { return; }
                     settled = true;
                     clearTimeout(giveUp);
-                    fallbackLoop();
+                    audioLoading = false;
+                    playFallback();
                 });
         }
 
-        ["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
-            document.addEventListener(ev, startLoop, { once: true, passive: true });
+        // Sound needs a gesture. Listeners stay until something actually
+        // plays, so a blocked first attempt is retried rather than latched.
+        var GESTURES = ["pointerdown", "keydown", "touchstart"];
+        function onGesture() { startLoop(); }
+        function releaseGestures() {
+            GESTURES.forEach(function (ev) {
+                document.removeEventListener(ev, onGesture);
+            });
+        }
+        GESTURES.forEach(function (ev) {
+            document.addEventListener(ev, onGesture, { passive: true });
         });
-        startLoop.tryNow = setTimeout(function () {
-            var AC = window.AudioContext || window.webkitAudioContext;
-            if (!AC) { return; }
-            var probe = new AC();
-            if (probe.state === "running") { probe.close(); startLoop(); }
-            else { probe.close(); }
-        }, 0);
+
+        // Backgrounded tabs suspend the context; bring it back on return.
+        document.addEventListener("visibilitychange", function () {
+            if (!document.hidden && audioCtx && audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+        });
 
         wrapper.addEventListener("click", function () {
             if (released()) {
