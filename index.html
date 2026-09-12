@@ -350,13 +350,32 @@
             }).catch(function () { audioEl = null; });
         }
 
-        function startLoop() {
-            if (audioPlaying || audioLoading) { return; }
-            var AC = window.AudioContext || window.webkitAudioContext;
-            if (!AC) { playFallback(); return; }
-
-            if (!audioCtx) { audioCtx = new AC(); }
+        // Begins the passes, but only once the context is actually running.
+        // A context created outside a gesture starts suspended; resume() on
+        // it is a no-op until the browser grants permission, so the gesture
+        // listeners stay armed until sound is genuinely going out.
+        function tryStart() {
+            if (audioPlaying || !audioBuf || !audioCtx) { return; }
             if (audioCtx.state === "suspended") { audioCtx.resume(); }
+            if (audioCtx.state !== "running") { return; }
+            nextPassAt = audioCtx.currentTime + 0.05;
+            pump();
+            audioTimer = setInterval(pump, PUMP_MS);
+            audioPlaying = true;
+            releaseGestures();
+        }
+
+        // Fetches and decodes so the bed is ready to go the instant playing is
+        // permitted. Safe to call before any interaction.
+        function ensureAudio() {
+            var AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) { return; }
+            if (!audioCtx) {
+                audioCtx = new AC();
+                audioCtx.onstatechange = function () { tryStart(); };
+            }
+            if (audioBuf) { tryStart(); return; }
+            if (audioLoading) { return; }
 
             audioLoading = true;
             var settled = false;
@@ -364,8 +383,7 @@
                 if (settled) { return; }
                 settled = true;
                 audioLoading = false;
-                playFallback();
-            }, 5000);
+            }, 8000);
 
             fetch(LOOP_SRC)
                 .then(function (r) { return r.arrayBuffer(); })
@@ -385,11 +403,7 @@
                     audioGain = audioCtx.createGain();
                     audioGain.gain.value = LOOP_GAIN;
                     audioGain.connect(audioCtx.destination);
-                    nextPassAt = audioCtx.currentTime + 0.05;
-                    pump();
-                    audioTimer = setInterval(pump, PUMP_MS);
-                    audioPlaying = true;
-                    releaseGestures();
+                    tryStart();
                 })
                 .catch(function () {
                     if (settled) { return; }
@@ -400,10 +414,11 @@
                 });
         }
 
-        // Sound needs a gesture. Listeners stay until something actually
-        // plays, so a blocked first attempt is retried rather than latched.
+        // Sound needs a gesture unless the browser has already granted this
+        // site autoplay. Listeners stay until something actually plays, so a
+        // blocked first attempt is retried rather than latched.
         var GESTURES = ["pointerdown", "keydown", "touchstart"];
-        function onGesture() { startLoop(); }
+        function onGesture() { ensureAudio(); }
         function releaseGestures() {
             GESTURES.forEach(function (ev) {
                 document.removeEventListener(ev, onGesture);
@@ -413,12 +428,16 @@
             document.addEventListener(ev, onGesture, { passive: true });
         });
 
+        // Try straight away: decodes ahead of time either way, and starts
+        // without a click wherever the browser permits it.
+        ensureAudio();
+
         // A backgrounded tab suspends the context and throttles the pump;
         // resume and top the queue up straight away on return.
         document.addEventListener("visibilitychange", function () {
             if (document.hidden || !audioCtx) { return; }
             if (audioCtx.state === "suspended") { audioCtx.resume(); }
-            pump();
+            if (!audioPlaying) { tryStart(); } else { pump(); }
         });
 
         wrapper.addEventListener("click", function () {
