@@ -302,9 +302,10 @@
                 ? "loop.webm" : "loop.m4a";
         })();
 
-        // The bed peaks at about -32 dBFS, which is inaudible on most
-        // speakers. Raise or lower this one number to set its level.
-        var LOOP_GAIN = 8;
+        // The bed peaks at about -32 dBFS on its own, which is inaudible on
+        // most speakers. This lifts it to roughly -26 dBFS. Raise or lower
+        // this one number to set its level; each doubling is +6 dB.
+        var LOOP_GAIN = 2;
 
         var LOOKAHEAD = 2.0;   // seconds of passes queued ahead; survives the
         var PUMP_MS = 500;     // 1s timer throttling of a backgrounded tab
